@@ -1,0 +1,118 @@
+---
+title: ""
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(phyloseq)
+library(ggplot2)
+library(RColorBrewer)
+library(tidyverse)
+library(gplots)
+
+```
+
+# Phyloseq Figures
+
+Here we let you explore some of the figures you can make using the phyloseq package.
+
+## Creating a phyloseq object
+
+### Read in some data
+Here we're importing data that is more or less an otu table and a taxonomy table. These steps will be different if you use your own data.
+
+```{r create_otu_1}
+
+
+taxatable_raw <- read_csv('bact_alldata_taxatable_wTax.csv')
+
+head(taxatable_raw)
+
+```
+
+As you can see, there is a missing column name, and R filled it in 'X1'. 
+
+For the otu table, we want to have the OTU names as row names, and get rid of the taxa column. The final command turns the data frame into an otu object.
+```{r create_otu_2}
+
+otu <- as.data.frame(select(taxatable_raw, -X1,-taxonomy))
+row.names(otu) <- taxatable_raw$X1
+
+otu <- otu_table(otu, taxa_are_rows = T)
+
+
+```
+
+
+The taxonomy is in the same file, but phyloseq will want it separate. Further, we want to separate all the phylogenetic levels into separate columns. Row names should be the OTU ids. Phyloseq also wants the taxonomy to be a matrix, before converting to a taxonomy table.
+
+```{r create_taxa_1}
+
+taxonomy <- data.frame(taxonomy=taxatable_raw$taxonomy)
+row.names(taxonomy)<- taxatable_raw$X1
+
+# Split taxonomy into separate columns
+taxonomy <- data.frame(separate(taxonomy, col=taxonomy, into= c("Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species"),
+                                sep = ";"))
+
+# Change spaces to NA for missing data
+taxonomy <- apply(taxonomy, 2, function(x) gsub("^$|^ $", NA, x))
+
+taxonomy <- as.matrix(taxonomy)
+taxonomy <- tax_table(taxonomy)
+
+
+```
+
+Finally, we want to get the sample meta data.
+
+```{r create_meta_1}
+map <- read_csv('bact_alldata_mapfile.csv')
+
+head(map)
+```
+
+Again, there is a missing column header. Here, we change it to 'Sample'. We also want to convert some columns which were coded as integers into factors. 
+Convert into sample data object.
+
+```{r create_meta_2}
+names(map)[1] <- 'Sample'
+
+row.names(map) <- map$Sample
+map[7:9] <- lapply(map[7:9] , factor)
+
+head(map)
+
+meta <- sample_data(map)
+
+
+```
+
+Finally, we can put it all together into a phyloseq object.
+
+```{r create_phyloseq}
+
+ps <- phyloseq(otu, taxonomy, meta)
+
+```
+
+
+## Drawing
+
+Now that we have a phyloseq object, we can start making some figures.
+
+Lets start with some alpha diversity measures.
+
+
+```{r alpha}
+
+p <- plot_richness(ps, x="Vertposition", measures=c("Shannon", "Simpson")) + theme_bw() + geom_point(size=2)
+p + geom_boxplot(data=p$data, aes(x=Vertposition, y=value, color=NULL), alpha = 0.1) + facet_grid( variable ~ litterorother, scales='free')
+
+
+
+```
+
+
+
