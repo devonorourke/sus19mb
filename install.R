@@ -4,4 +4,5 @@
 #install.packages("shinydashboard")
 #install.packages('leaflet')
 #install.packages("vegan")
-install.packages("mctoolsr")
+install.packages("devtools")
+devtools::install_github("leffj/mctoolsr")
