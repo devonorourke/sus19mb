@@ -1,0 +1,206 @@
+---
+title: "rforest"
+author: "Devon O'Rourke"
+date: "5/10/2019"
+output: html_document
+---
+
+## Motivation
+One common goal among amplicon analyses is to determine what sequence variants associate with a metadata factor. This notebook uses Random Forest (RF) classification to identify ASVs that help discriminate amongst a given set of factors. There are multiple means with which an RF classifier can be executed, and multiple variations of this classifier are shown below. 
+Outputs include vary depending on the type of model being executed, but in general you can expect:
+1) A confusion matrix that demonstates the precision of the model
+2) A list of ASVs important to the RF model are both identified, and their overall importance to the model are provided in the k-fold cross-validated example (the last one)
+3) A plot showing the abundances of these important ASVs relative to their metadata group
+
+Code is adapted from a tutorial available at this address: https://github.com/LangilleLab/microbiome_helper/wiki/Random-Forest-Tutorial
+
+## Inputs
+We create a Phyloseq object using:
+1) A table of per-sample, per-ASV abundances ("OTU table"), 
+2) A metadata file 
+3) A taxonomy file
+
+We are using a previously generated dataset that executed this code:
+```{r}
+require(tidyverse)
+taxatable_raw <- read_csv(file = "https://github.com/devonorourke/sus19mb/raw/master/bact_alldata_taxatable_wTax.csv")
+otu <- as.data.frame(select(taxatable_raw, -X1,-taxonomy))
+row.names(otu) <- taxatable_raw$X1
+otu <- otu_table(otu, taxa_are_rows = T)
+
+taxonomy <- data.frame(taxonomy=taxatable_raw$taxonomy)
+row.names(taxonomy)<- taxatable_raw$X1
+taxonomy <- data.frame(separate(taxonomy, col=taxonomy, into= c("Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species"),sep = ";"))
+taxonomy <- apply(taxonomy, 2, function(x) gsub("^$|^ $", NA, x))
+taxonomy <- as.matrix(taxonomy)
+taxonomy <- tax_table(taxonomy)
+
+
+map <- read_csv(file = "https://github.com/devonorourke/sus19mb/raw/master/bact_alldata_mapfile.csv")
+names(map)[1] <- 'Sample'
+row.names(map) <- map$Sample
+map[7:9] <- lapply(map[7:9] , factor)
+map2 <- data.frame(map)
+meta <- sample_data(map)
+
+## import as phyloseq object
+ps <- phyloseq(otu, taxonomy, meta)
+```
+
+
+## Load libraries
+```{r}
+## runonce: install.packages("randomForest")
+## runonce: install.packages("rfUtilities")
+## runonce: install.packages("caret")
+## runonce: install.packages("e1071")
+## runonce: install.packages("klaR")
+
+library("randomForest")
+library("rfUtilities") # to test model significance
+library("caret") # for k-fold cross validation
+library(e1071)  # caret package dependency
+library(klaR)   # caret package dependency
+```
+
+
+## Filtering and normalizing considerations
+Authors of the tutorial document multiple approaches to both taxa filtering and read abundance normalization. Note that to incorporate those functions described one would need to operate on the `otu` and `meta` objects in the workflow, not the `ps` phyloseq object. Because we've imported our data as a Phyloseq object we'll use the functions already written for that program to filter and transform these data. 
+
+For simplicity we'll drop just those ASVs identified to a single sample and retain all others. We are not normalizing these data in any fashion in this example. We're also applying a very harsh filter here! This isn't to promote any specific filtering function; rather this is to reduce the number of ASVs in the dataset which will help reduce the computational burden for our classifyer in this example.
+
+```{r}
+## Remove taxa not seen more than 3 times in at least 20% of the samples
+ps2 = filter_taxa(ps, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
+
+## saninity check: did we drop a lot of samples and/or taxa?
+nsamples(ps2) ## nope
+ntaxa(ps2)    ## yep.
+
+## filter original `otu` object to retain only those taxa that pass filter
+otu2 <- otu[taxa_names(ps2),]   ## this is the object we'll use for RF classifying
+```
+
+
+## Running the model - no permutations
+Transforming our ASV table and metadata into a single object. First, transpose the `otu` table, then append whichever metadata you want to run the classifier with. In this example, we'll use the metadata column `$Verposition` - the vertical position the samples were obtained:
+```{r}
+t_otu <- data.frame(t(otu2))  ## update the ASV table of interest given filtering cosiderations above
+t_otu$Vertposition <- map2[rownames(t_otu), "Vertposition"]
+```
+
+Set seed, then train the classifier:
+```{r}
+require(randomForest)
+set.seed(151)
+RF_state_classify <- randomForest( x=t_otu[,1:(ncol(t_otu)-1)] , 
+                                   y=t_otu[ , ncol(t_otu)] , 
+                                   ntree=501, importance=TRUE, proximities=TRUE )
+```
+
+Summaries of the classifier. Two main points to take note of in the summary: 
+1) the OOB (out-of-bag) estimate is an indication of the prediction error of the model
+2) the Confusion matrix displays where predictions were and were not correct
+
+```{r}
+RF_state_classify
+```
+
+We can plot this confusion matrix as a heatmap too:
+```{r}
+require(tidyverse)
+cfuzmat <- data.frame(RF_state_classify$confusion)
+cfuzmat$Predicted <- row.names(cfuzmat)
+tmp <- cfuzmat
+tmp$class.error <- NULL
+tmp$Predicted <- NULL
+tmp2 <- sweep(tmp, 1, rowSums(tmp), '/')
+tmp2$class.error <- tmp2$class.error
+tmp2$Predicted <- row.names(tmp2)
+cfuzplot <- gather(data = tmp2, key = Expected, value = value, X1:X5)
+cfuzplot$Expected <- gsub("^X", "", cfuzplot$Expected)  ## removing the X from label name...
+ggplot(cfuzplot, aes(x=Predicted, y=Expected)) +
+  geom_tile(aes(fill=value), color="grey50") +
+  scale_fill_viridis_c() +
+  labs(fill="fraction of\nsamples assigned")
+```
+
+
+### which features are important?
+We can see from the above confusion matrix that the classifier does a good job of assigning the correct samples to some sites but not to others. We might be interested in determining which ASVs are relevant to creating this model in the first place:
+
+```{r}
+RF_state_classify_imp <- as.data.frame( RF_state_classify$importance )
+RF_state_classify_imp$features <- rownames( RF_state_classify_imp )
+```
+
+The values in the first few columns represent the decrease in prediction accuracy to the model when that particular ASV is removed from the classifier. Thus, the columns that match the metadata variable (`$Vertposition`) we were using as the predictive variable to traing the classifier with may demonstrate distinct accuracy prediction values for a given ASV. 
+
+
+## Running the model with permutations
+Can incorporate significance information to RF model with permutations:
+```{r}
+require(rfUtilities)
+RF_state_classify_sig <- rf.significance( x=RF_state_classify ,  
+                                          xdata=t_otu[,1:(ncol(t_otu)-1)] , 
+                                          nperm=100 , ntree=501 )
+
+RF_state_classify_sig
+```
+Note that the model OOB error rate remains around the same 36.7% we observed in a single run.
+
+
+## Running the model with "leave out" and permutations
+```{r}
+require(caret)
+fit_control <- trainControl( method = "LOOCV" )   ## method is "Leave One Out Cross Validation"
+RF_state_classify_loo <- train( t_otu[,1:(ncol(t_otu)-1)] ,
+                                 y=t_otu[, ncol(t_otu)] ,
+                                 method="rf", ntree=501 , tuneGrid=data.frame( mtry=25 ) ,
+                                 trControl=fit_control )
+```
+
+To assess results:
+```{r}
+RF_state_classify_loo$results
+```
+
+## Running the model with repeated k-fold cross-validation
+This method will take the entire dataset and split it into two groups: one subset is used to train the model, and the remaining subset not used in training is used to test the classifer. This process is repeated k-times, with each iteration having our dataset being shuffled so that the subset of data used to train and test are different with each iteration.
+
+```{r}
+require(caret)
+# define training control
+train_control <- trainControl(method="repeatedcv", number=5, repeats=10)
+# train the model
+model <- train(state ~ ., data = t_otu, trControl=train_control, method="rf", importance=TRUE)
+
+# summarize results
+print(model)
+```
+
+Obtaining the "imporatance" for each ASV to the model
+```{r}
+model_imp <- data.frame(varImp(model)$importance)
+model_imp$taxa <- row.names(model_imp)
+mi_plotdat <- gather(data = model_imp, 
+                     key = State, 
+                     value = Importance,
+                     X1:X5)
+```
+
+
+Plot the Importance values associated with each ASV per metadata group.
+```{r}
+ggplot(mi_plotdat, aes(x=State, y=Importance, label=taxa)) +
+  geom_point() +
+  theme_bw()
+```
+
+## misc
+more resources for classifiers:
+http://topepo.github.io/caret/pre-processing.html
+https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm
+https://machinelearningmastery.com/k-fold-cross-validation/
+https://cran.r-project.org/web/packages/caret/caret.pdf
+https://github.com/LangilleLab/microbiome_helper/wiki/Random-Forest-Tutorial
