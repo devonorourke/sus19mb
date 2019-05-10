@@ -1,0 +1,5 @@
+matplotlib
+altair
+pandas
+palettable
+vega
