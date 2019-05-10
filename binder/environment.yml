@@ -10,4 +10,6 @@ dependencies:
   - r-plotly
   - r-upsetr
   - r-ggpubr
+  - r-knitr
   - bioconductor-phyloseq
+  - notedown
