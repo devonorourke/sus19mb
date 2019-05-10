@@ -1,0 +1,5 @@
+pkgs = c("reshape2", "dplyr", "readr", "ggplot2", "plotly","upsetr","ggpubr","knitr")
+ncores = parallel::detectCores()
+install.packages(pkgs, Ncpus = ncores)
+source('http://bioconductor.org/biocLite.R')
+biocLite('phyloseq')
