@@ -1,1 +1,414 @@
+---
+title: "Hackathon_Davis_Metabarcoding"
+author: "Metabarcoding group"
+date: "5/9/2019"
+output: html_document
+---
 
+```{r}
+
+library(ggplot2)
+library(phyloseq)
+library(vegan)
+library(dplyr)
+library(tidyr)
+library(reshape2)
+library(biomformat)
+library(ggpubr)
+library(UpSetR) #plot bargroups/venn dots
+
+
+
+#This code is for starting with a biom file. 
+#We have provided a .csv file for all of our data, and will begin there. 
+#However, if you have a biom file, begin up here
+###Begin by importing a .biom file and the associated metadata files
+## This code will tranfer your biom file into a csv file so you can use it in R and across other platforms
+## If order to begin, you will need a biom file, as well as .csv files of your metadata and your taxonomic assignments. 
+## You can add additional metadata later on, but having it initially will make it easier to work with
+
+#Load your biom file into the environment
+#file_path <- "otu_table_no_con.biom"
+
+##Read the biom and load it as an object
+#BiomFile <- read_biom(file_path)
+
+#You can't go straight from a "sparse Matrix" to a data frame 
+#otu_table <- as.data.frame(as.matrix(biom_data(BiomFile)))
+#py_raw <-write.csv(as.matrix(otu_table),"py_raw.csv")
+
+
+```
+
+```{r}
+#read in data from csv files
+
+#Data has been size limited and common contaminants removed; annotations from Filtered file
+## We will begin with creating a phyloseq object
+# It will be called Htree
+
+Htree <- merge_phyloseq(otu_table(as.matrix(read.csv(file = "py_raw.csv", row.names = 1,check.names = FALSE)), taxa_are_rows = TRUE),tax_table(as.matrix(read.csv(file = "py_taxa.csv", row.names = 1))),sample_data(read.csv(file = "py_meta.csv", row.names = 1)))
+
+Htree
+```
+
+#look at Number of Reads across samples with lower read counts
+```{r}
+plot(sample_sums(Htree))
+
+oBiom_low =prune_samples(sample_sums(Htree)<=10000, Htree)
+sample_sums(oBiom_low)
+#plot_bar(oBiom_low,fill = "Phylum")   +  ggtitle("COI Phylum")
+TopNOTUs <- names(sort(taxa_sums(oBiom_low), TRUE)[1:12])
+top10   <- prune_species(TopNOTUs, oBiom_low)
+top10 = prune_taxa(taxa_sums(top10)>0, top10)
+plot_bar(top10, fill = "Phylum")   +  ggtitle("Low Read Samples")
+plot_bar(top10,  fill = "Class")   +  ggtitle("Low Read Samples")
+plot_bar(top10,  fill = "Genus")   +  ggtitle("Low Read Samples")
+plot_bar(top10,  fill = "Species")   +  ggtitle("Low Read Samples") + scale_fill_brewer(palette = "Paired")
+
+
+```
+#vegan matrix
+```{r}
+#Make vegan matrix from phyloseq object
+#From phyloseq tutorial
+#Non-rarefied matrixes
+
+vegan_otu <- function(physeq) {
+  OTU <- otu_table(physeq)
+  if (taxa_are_rows(OTU)) {
+    OTU <- t(OTU)
+  }
+  return(as(OTU, "matrix"))
+}
+
+vegan_matrix_raw=vegan_otu(Htree)
+otu_tab_raw=otu_table(Htree)
+tax_tab_raw= tax_table(Htree)
+samp_dat_raw <- sample_data(Htree)
+```
+
+
+#rarefy
+```{r}
+#rarefaction curves
+#This will visualize you data to see where you may need to rarefy to
+rarecurves  = rarecurve(vegan_matrix_raw, step=1000, xlab = "Sample Size", ylab = "OTUs")
+rarecurves
+
+#rarefy
+##You will need to change these values for your own dataset
+rarefy_lim <- 2000 #set read limit for rarefaction
+seed_num <- 678  #set arbitrary seed number for repeatability 
+rare_Htree = prune_samples(sample_sums(Htree)>=rarefy_lim, Htree)
+rare_Htree = rarefy_even_depth(rare_Htree, sample.size = min(sample_sums(rare_Htree)), rngseed = seed_num, replace = FALSE, trimOTUs = TRUE, verbose = TRUE)
+rare_Htree
+print(min(sample_sums(rare_Htree)))
+```
+
+```{r}
+#Make vegan matrix from phyloseq object
+#From phyloseq tutorial
+#Rarefied matrixes
+
+vegan_otu <- function(physeq) {
+  OTU <- otu_table(physeq)
+  if (taxa_are_rows(OTU)) {
+    OTU <- t(OTU)
+  }
+  return(as(OTU, "matrix"))
+}
+
+##This creates a vegan matrix that will be able to be used throughout R packages
+vegan_matrix=vegan_otu(rare_Htree)
+#Create an OTU Table
+otu_tab=otu_table(rare_Htree)
+#Create a Taxa Table
+tax_tab= tax_table(rare_Htree)
+#Create a table with sample metadata
+samp_dat <- sample_data(rare_Htree)
+```
+
+```{r}
+#look at top OTUs in rarefied dataset
+TopNOTUs <- names(sort(taxa_sums(rare_Htree), TRUE)[1:12])
+top10   <- prune_species(TopNOTUs, rare_Htree)
+top10 = prune_taxa(taxa_sums(top10)>0, top10)
+tax_table(top10)
+plot_bar(top10,fill = "Phylum")   +  ggtitle("Top OTUs")
+plot_bar(top10, fill = "Class")   +  ggtitle("Top OTUs")
+plot_bar(top10, fill = "Genus")   +  ggtitle("Top OTUs")
+plot_bar(top10, fill = "Species")   +  ggtitle("Top OTUs") + scale_fill_brewer(palette = "Paired")
+
+```
+
+
+
+```{r}
+#Plot Hill Numbers for Alpha Diversity
+
+
+
+#Hill number function from vegan
+hill = renyi(vegan_matrix, scales = c(0, 0.5, 1, 1.5, 2), hill = TRUE)
+hill
+plot(hill) #standard plot from function
+#reformat for plotting with ggplot and add metadata
+hill$SampleID <- row.names(hill)
+c = melt(data = hill,value.name = 'Diversity', variable.name = 'HillNum' )
+#merge in metadata
+samp_dat$SampleID <- row.names(samp_dat) #create column of SampleID from index
+d <- tbl_df(samp_dat) #df of metadata
+#join by index
+joined_df <- inner_join(c,d, by=c('SampleID')) #join by SampleID column
+
+#Plot Hill numbers
+joined_df$Vertposition_cat = as.character(joined_df$Vertposition) #make vertical position categorical
+joined_df$HillNum_n = as.factor(joined_df$HillNum)
+ggplot(joined_df,aes(x=HillNum, y=Diversity, color=Vertposition_cat))+
+  geom_point()
+
+ggline(joined_df, x = "HillNum_n", y = "Diversity", 
+       add = c("mean_se", "jitter"), 
+       group = "Vertposition_cat",
+       color = "Vertposition_cat",
+       palette ="RdYlGn",
+       ylab = "Diversity", xlab = "Description")
+
+```
+
+
+
+#NMDS script
+```{r}
+setwd("/Users/kpitz/Projects/UC_Davis_Hackathon/sus19mb-master")
+
+###You need to decide how you would like to graph your data
+##For example, do you need to square root transform it?
+##Is your data rarefied?
+##Make sure you do not have any taxonomy data in this file
+
+#OTUMatrix_Original <- read.csv("bact_alldata_taxatable2.csv")
+OTUMatrix_Original <- vegan_matrix_raw
+
+##This could beging with the OTU Matrix from Vegan
+#Create a squareroot transformed matrix
+sqrt_OTUmatrix_bact <-  sqrt(OTUMatrix_Original)
+OTU_Matrix<-sqrt_OTUmatrix_bact
+str(OTU_Matrix)
+#create the NMS object
+Bact_NMS_data<-metaMDS(OTU_Matrix,distance = "bray", k=2,try=100,autotransform = TRUE,maxit=1000)
+
+#data are square root transformed, and then rescaled ("Wisoncin rescaling")
+
+
+#create vectors with the NMS attributes
+NMS_coordinates<-scores(Bact_NMS_data,display="sites")
+Bact_NMS_axes<-as.data.frame(NMS_coordinates)
+#Save your coordinates
+write.csv(Bact_NMS_axes,"Bact_NMS_axes.csv")
+NMS_OTUscores<-scores(Bact_NMS_data,display="species")
+
+##Load Mapping File
+Mapping_File <- tbl_df(samp_dat_raw)
+str(Mapping_File)
+attach(Mapping_File)
+#Change our grouping variable into a factor because it is being read as a number
+vertical = as.factor(Vertposition)
+
+#create dataframe with NMS Coordinates and Mapping File information
+#add the proportion of total sequences of each vector to the "for_plotting" object below
+for_ploting<-as.data.frame(cbind(NMS_coordinates,Mapping_File))
+str(for_ploting)
+```
+
+```{r}
+#now plot these data
+#png(file="Bact_NMS_black_small.png", width = 6000, height = 4800, res = 1200)
+par(mar=c(4,4,1,1))
+plot(for_ploting$NMDS2 ~ for_ploting$NMDS1,
+     xlab = "NMS1",
+     ylab = "NMS2",
+     font=2,
+     font.lab=2,
+     cex.axis=1,
+     pch = c(0, 1, 2, 5, 4)[as.factor(Mapping_File$Vertposition)], cex=.8,  # different 'pch' types 
+     data = for_ploting)
+ordiellipse(Bact_NMS_data, group=Mapping_File$Vertposition,kind = "se", 
+            conf=0.95, lwd=1.9, lty= c(1,5,2,4,3))
+legend(
+  x ="bottomright",
+  legend = c("Litter","Understory","Subcanopy","Canopy","Emergent"), # for readability of legend
+  pch = c(0, 1, 2,5,4),
+  cex = .60 # scale the legend to look attractively sized
+)
+
+#dev.off()
+```
+
+
+
+```{r}
+#now these figure colorful!!! It might be useful to have colorful figures
+#png(file="Bact_NMS_color.png", width = 6000, height = 4800, res = 1200)
+par(mar=c(4,4,1,1))
+plot(for_ploting$NMDS2 ~ for_ploting$NMDS1,
+     xlab = "NMS1",
+     ylab = "NMS2",
+     font=2,
+     font.lab=2,
+     cex.axis=1,
+     pch = c(0, 1, 2, 5, 4)[as.factor(Mapping_File$Vertposition)], cex=.8, 
+     col =c("black","saddlebrown","tan2","green1","green4")[as.factor(Mapping_File$Vertposition)],  # different 'pch' types 
+     data = for_ploting)
+ordiellipse(Bact_NMS_data, group=Mapping_File$Vertposition,kind = "se", 
+            conf=0.95, lwd=1.9, col =c("black","saddlebrown","tan2","green1","green4"))
+legend(
+  x ="bottomright",
+  legend = c("Litter","Understory","Subcanopy","Canopy","Emergent"), # for readability of legend
+  pch = c(0, 1, 2,5,4),
+  col =c("black","saddlebrown","tan2","green1","green4"),
+  cex = .60 # scale the legend to look attractively sized
+)
+
+
+#dev.off()
+
+
+```
+
+
+#Create DFs from phyloseq object and make Upset plot by Vertical Position
+
+```{r}
+#subset from phyloseq, for the same vertical position
+loc_1_all = subset_samples(Htree, Vertposition ==1)
+loc_1_all
+
+vegan_matrix_loc1=vegan_otu(loc_1_all)
+vegan_matrix_loc1 <- as.data.frame(vegan_matrix_loc1)
+vegan_matrix_loc1$Sample_ID <- row.names(vegan_matrix_loc1)
+vegan_matrix_loc1
+
+#otu_tab_raw=otu_table(Htree)
+#tax_tab_raw= tax_table(Htree)
+samp_dat_loc1 <- sample_data(Htree)
+samp_dat_loc1$Sample_ID <- row.names(samp_dat_loc1)
+samp_dat_loc1 <- tbl_df(samp_dat_loc1)
+
+
+samp_dat_loc1 <-  samp_dat_loc1 %>%
+  select(Vertposition,transecttree, Sample_ID)
+otu_names <- colnames(vegan_matrix_loc1)
+joined_mat <- merge(vegan_matrix_loc1,samp_dat_loc1, by='Sample_ID')   
+a <- ncol(joined_mat)
+colnames(joined_mat)[a]
+unique(joined_mat$Vertposition) #check should be all 1
+unique(joined_mat$transecttree) #the levels of your data that should be carried to the graph
+
+```
+
+```{r}
+#Need to groupby transecttree
+joined_mat_group <- joined_mat %>% gather(key=OTUs, value=Reads, otu_names) %>% 
+  mutate(Reads = as.numeric(Reads)) %>% 
+  group_by(transecttree, OTUs) %>% 
+  summarize(Readsum = sum(Reads))
+
+joined_mat_group
+```
+
+```{r}
+joined_mat_test <- joined_mat_group %>% dcast(.,OTUs~transecttree,value.var = 'Readsum', fill=0)
+row.names(joined_mat_test) <- joined_mat_test$OTUs
+joined_mat_test$OTUs <-NULL
+joined_mat_test[joined_mat_test>0] <-1
+joined_mat_test
+#nsets = number of different groups in your dataset
+test <- upset(nsets = 10, joined_mat_test, order.by = 'freq')
+```
+
+
+#Now make Upset plot Across Vertical Positions from a single transect
+
+```{r}
+#subset from phyloseq, for the same vertical position
+loc_1_all = subset_samples(Htree, transecttree ==1)
+loc_1_all
+
+vegan_matrix_loc1=vegan_otu(loc_1_all)
+vegan_matrix_loc1 <- as.data.frame(vegan_matrix_loc1)
+vegan_matrix_loc1$Sample_ID <- row.names(vegan_matrix_loc1)
+vegan_matrix_loc1
+
+samp_dat_loc1 <- sample_data(Htree)
+samp_dat_loc1$Sample_ID <- row.names(samp_dat_loc1)
+samp_dat_loc1 <- tbl_df(samp_dat_loc1)
+
+
+samp_dat_loc1 <-  samp_dat_loc1 %>%
+  select(Vertposition,transecttree, Sample_ID)
+otu_names <- colnames(vegan_matrix_loc1)
+joined_mat <- merge(vegan_matrix_loc1,samp_dat_loc1, by='Sample_ID')   
+a <- ncol(joined_mat)
+colnames(joined_mat)[a]
+unique(joined_mat$Vertposition) #check should be all be same number
+
+joined_mat_group <- joined_mat %>% gather(key=OTUs, value=Reads, otu_names) %>% 
+  mutate(Reads = as.numeric(Reads)) %>% 
+  group_by(Vertposition, OTUs) %>% 
+  summarize(Readsum = sum(Reads))
+joined_mat_group
+
+joined_mat_test <- joined_mat_group %>% dcast(.,OTUs~Vertposition,value.var = 'Readsum', fill=0)
+row.names(joined_mat_test) <- joined_mat_test$OTUs
+joined_mat_test$OTUs <-NULL
+joined_mat_test[joined_mat_test>0] <-1
+joined_mat_test
+
+test <- upset(joined_mat_test, nsets=5, order.by = 'freq')
+```
+
+
+#Now make Upset plot Across Vertical Positions regardless of transect
+#remove OTUs with less than 10 reads
+
+```{r}
+#subset from phyloseq, for the same vertical position
+loc_1_all = filter_taxa(Htree, function(x) sum(x) > 9, TRUE)
+loc_1_all
+
+vegan_matrix_loc1=vegan_otu(loc_1_all)
+vegan_matrix_loc1 <- as.data.frame(vegan_matrix_loc1)
+vegan_matrix_loc1$Sample_ID <- row.names(vegan_matrix_loc1)
+vegan_matrix_loc1
+
+samp_dat_loc1 <- sample_data(Htree)
+samp_dat_loc1$Sample_ID <- row.names(samp_dat_loc1)
+samp_dat_loc1 <- tbl_df(samp_dat_loc1)
+
+
+samp_dat_loc1 <-  samp_dat_loc1 %>%
+  select(Vertposition,transecttree, Sample_ID)
+otu_names <- colnames(vegan_matrix_loc1)
+joined_mat <- merge(vegan_matrix_loc1,samp_dat_loc1, by='Sample_ID')   
+a <- ncol(joined_mat)
+colnames(joined_mat)[a]
+unique(joined_mat$Vertposition) #check numbers
+unique(joined_mat$transecttree)
+
+joined_mat_group <- joined_mat %>% gather(key=OTUs, value=Reads, otu_names) %>% 
+  mutate(Reads = as.numeric(Reads)) %>% 
+  group_by(Vertposition, OTUs) %>% 
+  summarize(Readsum = sum(Reads))
+joined_mat_group
+
+joined_mat_test <- joined_mat_group %>% dcast(.,OTUs~Vertposition,value.var = 'Readsum', fill=0)
+row.names(joined_mat_test) <- joined_mat_test$OTUs
+joined_mat_test$OTUs <-NULL
+joined_mat_test[joined_mat_test>0] <-1
+joined_mat_test
+
+test <- upset(joined_mat_test, order.by = 'freq')
+```
