@@ -1,4 +1,4 @@
-pkgs = c("reshape2", "dplyr", "readr", "ggplot2", "plotly","upsetr","ggpubr","knitr")
+pkgs = c("reshape2", "dplyr", "readr", "ggplot2", "plotly","upsetr","ggpubr","knitr","vegan","tidyr")
 ncores = parallel::detectCores()
 install.packages(pkgs, Ncpus = ncores)
 source('http://bioconductor.org/biocLite.R')
