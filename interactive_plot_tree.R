@@ -99,7 +99,7 @@ interactive_plot_tree <- function (physeq, method = "sampledodge", nodelabf = NU
     dodgeDT <- dodgeDT[Abundance > 0, ]
   }
   dodgeMap <- aes_string(x = "xdodge", y = "y", color = color, 
-                         fill = color, shape = shape, size = size, name=tooltip)
+                         fill = color, shape = shape, size = size, names=tooltip)
   p <- p + geom_point(dodgeMap, data = dodgeDT, na.rm = TRUE)
   if (!is.null(size)) {
     p <- p + scale_size_continuous(trans = log_trans(sizebase))
