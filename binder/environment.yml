@@ -1,0 +1,13 @@
+name: example-environment
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-reshape2
+  - r-dplyr
+  - r-readr
+  - r-ggplot2
+  - r-plotly
+  - r-upsetr
+  - r-ggpubr
+  - bioconductor-phyloseq

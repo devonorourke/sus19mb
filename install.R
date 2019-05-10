@@ -1,7 +1,0 @@
-source('http://bioconductor.org/biocLite.R')
-biocLite('phyloseq')
-install.packages("UpSetR")
-install.packages("dplyr")
-install.packages("tidyr")
-install.packages("ggpubr")
-install.packages("readr")
