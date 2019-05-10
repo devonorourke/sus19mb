@@ -53,7 +53,7 @@ plotlyNMDS<-ggplotly(p=p, tooltip = "Sample")
 plotlyNMDS
 
 # You can save the plot as html
-htmlwidgets::saveWidget(plotlyNMDS, "test.html")
+htmlwidgets::saveWidget(plotlyNMDS, "NMDS_with_plotly.html")
 
 
 
