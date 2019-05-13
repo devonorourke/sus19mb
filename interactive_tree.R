@@ -35,7 +35,7 @@ map[7:9] <- lapply(map[7:9] , factor)
 meta <- sample_data(map)
 
 
-input_tree <- read_tree('Bact_pruned_tree.tre')
+input_tree <- read_tree('../../Documents/sus19mb/Bact_pruned_tree.tre')
 
 ps <- phyloseq(otu, taxonomy, meta, input_tree)
 
@@ -71,8 +71,8 @@ pt <- plot_tree(ps_H, ladderize="left", color="Treatment", size='abundance', lab
 pt <- pt + geom_point(data=as.data.frame(tax_table(ps_ricket)), aes(name=Genus))
 
 
-pt <- interactive_plot_tree(ps_ricket, ladderize="left", color="Vertposition", size='abundance', tooltip = 'Family')  + 
-  guides(color = guide_legend(override.aes = list(size=5))) + scale_color_brewer(palette = 'Dark2') 
+pt <- interactive_plot_tree(ps, ladderize="left", color="Vertposition", size='abundance', tooltip = 'Family')  + 
+  guides(color = guide_legend(override.aes = list(size=4))) + scale_color_brewer(palette = 'Dark2') 
 
 
 
@@ -82,6 +82,7 @@ plotly_tree<-ggplotly(p=pt)
 
 plotly_tree
 
+htmlwidgets::saveWidget(plotly_tree, 'Full_tree_with_hover.html')
 
 
 
