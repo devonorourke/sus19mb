@@ -1,26 +1,31 @@
 ---
-title: ''
+title: 'Interactive NMDS'
 author: "Niel Infante"
 date: "5/14/2019"
 output: html_document
 ---
 
-Load the needed packages.
+This notebook will show you how to create a simple interactive NMDS plot of your data. Its not truly interactive, but it will show sample names when you hover over points. We will use [plotly](https://plot.ly/r/), which modifies a ggplot to add the actions we want.
 
-```{r setup, include=TRUE, message=F, warning=F}
-knitr::opts_chunk$set(echo = TRUE, message=F)
+
+
+
+```{r setup, include=F}
+knitr::opts_chunk$set(echo = T, message=F, warning=F)
+
+```
+### Load the needed packages.
+
+```{r packages}
 library(phyloseq)
 library(ggplot2)
 library(RColorBrewer)
 library(tidyverse)
 library(plotly)
-#library(gplots)
 library(vegan)
 
-
 ```
-
-## Get data
+### Get data
 And do some preprocessing.
 ```{r get_data}
 otu <- read_tsv('Data_Files/otu.tsv')
@@ -34,7 +39,7 @@ meta[7:9] <- lapply(meta[7:9] , factor)
 
 ```
 
-## Do your ordination
+### Do your ordination
 You can use any ordination method you like. Here I use metaMDS from vegan. The only issue with using others is the returned object will be different, and you'll have to find out how to access the point data.
 
 ```{r do_ordination, results='hide'}
@@ -42,7 +47,7 @@ nmds_out <- metaMDS(otu, distance='bray', k=2, trymax=100 ,maxit=1000)
 
 ```
 
-## Get the coordinates of the points 
+### Get the coordinates of the points 
 and add metadata to data frame
 
 ```{r get_points}
@@ -53,13 +58,13 @@ NMDS <- cbind(NMDS, meta)
 
 ```
 
-## Create the plot using ggplot.
+### Create the plot using ggplot.
 This is a standard ggplot, and you can do what you like with it,
 add shapes and colors, add lines, whatever.
 
 Note: "names" in the geom_point() command is not recognized by the ggplot2 package, and will throw a warning. (Warning: Ignoring unknown aesthetics: names). This is actually recognized by the plotly package and is the way to define information that is displayed by hovering over points in the graph. 
 
-```{r ggplot}
+```{r ggplot, warning=T}
 my_plot <- ggplot(data = NMDS, aes(x, y)) + 
   geom_point(size = 2.8, alpha=0.8, aes(color = Vertposition, shape = litterorother, names = Sample))+
   coord_fixed()+
@@ -70,7 +75,7 @@ my_plot <- ggplot(data = NMDS, aes(x, y)) +
   theme_minimal() 
 ```
 
-## Interactive plot with Plotly Package 
+### Interactive plot with Plotly Package 
 The tooltip needs to match what you put in as names above in the ggplot
 
 ```{r plotly}
