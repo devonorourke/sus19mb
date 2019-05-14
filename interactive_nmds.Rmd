@@ -1,0 +1,88 @@
+---
+title: ''
+author: "Niel Infante"
+date: "5/14/2019"
+output: html_document
+---
+
+Load the needed packages.
+
+```{r setup, include=TRUE, message=F, warning=F}
+knitr::opts_chunk$set(echo = TRUE, message=F)
+library(phyloseq)
+library(ggplot2)
+library(RColorBrewer)
+library(tidyverse)
+library(plotly)
+#library(gplots)
+library(vegan)
+
+
+```
+
+## Get data
+And do some preprocessing.
+```{r get_data}
+otu <- read_tsv('Data_Files/otu.tsv')
+meta <- read_tsv('Data_Files/metadata.tsv')
+
+# The otu table needs to be transposed first
+otu <- t(otu)
+
+# The meta data has some columns that should be factors
+meta[7:9] <- lapply(meta[7:9] , factor)
+
+```
+
+## Do your ordination
+You can use any ordination method you like. Here I use metaMDS from vegan. The only issue with using others is the returned object will be different, and you'll have to find out how to access the point data.
+
+```{r do_ordination, results='hide'}
+nmds_out <- metaMDS(otu, distance='bray', k=2, trymax=100 ,maxit=1000)
+
+```
+
+## Get the coordinates of the points 
+and add metadata to data frame
+
+```{r get_points}
+NMDS <- data.frame(x=nmds_out$point[,1],y=nmds_out$point[,2])
+
+# Add meta data to the data frame
+NMDS <- cbind(NMDS, meta)
+
+```
+
+## Create the plot using ggplot.
+This is a standard ggplot, and you can do what you like with it,
+add shapes and colors, add lines, whatever.
+
+Note: "names" in the geom_point() command is not recognized by the ggplot2 package, and will throw a warning. (Warning: Ignoring unknown aesthetics: names). This is actually recognized by the plotly package and is the way to define information that is displayed by hovering over points in the graph. 
+
+```{r ggplot}
+my_plot <- ggplot(data = NMDS, aes(x, y)) + 
+  geom_point(size = 2.8, alpha=0.8, aes(color = Vertposition, shape = litterorother, names = Sample))+
+  coord_fixed()+
+  guides(shape=guide_legend(title=NULL))+
+  theme(legend.position = "bottom")+
+  ylab("NMDS Axis 2")+
+  xlab("NMDS Axis 1")+
+  theme_minimal() 
+```
+
+## Interactive plot with Plotly Package 
+The tooltip needs to match what you put in as names above in the ggplot
+
+```{r plotly}
+plotlyNMDS<-ggplotly(p=my_plot, tooltip = "Sample")
+
+# Show the plot
+plotlyNMDS
+
+```
+
+You can save the plot as an html file.
+
+htmlwidgets::saveWidget(plotlyNMDS, "NMDS_with_plotly.html")
+
+
