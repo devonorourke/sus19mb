@@ -29,8 +29,8 @@ Some data munging needs to happen to get the data files we have into the form ne
 
 ```{r read_data}
 
-map <- read_csv('Data_files/bact_alldata_mapfile.csv')
-tax <- read_csv('Data_files/bact_alldata_taxatable_wTax.csv')
+map <- read_csv('Data_Files/bact_alldata_mapfile.csv')
+tax <- read_csv('Data_Files/bact_alldata_taxatable_wTax.csv')
 
 otu <- as.data.frame(select(tax, -X1,-taxonomy))
 row.names(otu) <- tax$X1

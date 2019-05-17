@@ -25,7 +25,7 @@ Here we're importing data that is more or less an otu table and a taxonomy table
 ```{r create_otu_1}
 
 
-taxatable_raw <- read_csv('Data_files/bact_alldata_taxatable_wTax.csv')
+taxatable_raw <- read_csv('Data_Files/bact_alldata_taxatable_wTax.csv')
 
 head(taxatable_raw)
 
@@ -68,7 +68,7 @@ taxonomy <- tax_table(taxonomy)
 Finally, we want to get the sample meta data.
 
 ```{r create_meta_1}
-map <- read_csv('Data_files/bact_alldata_mapfile.csv')
+map <- read_csv('Data_Files/bact_alldata_mapfile.csv')
 
 head(map)
 ```
