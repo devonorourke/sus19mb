@@ -1,5 +1,6 @@
 ---
-title: ""
+title: "Phyloseq Figures"
+author: "Niel Infante"
 output: html_document
 ---
 
@@ -13,7 +14,6 @@ library(gplots)
 
 ```
 
-# Phyloseq Figures
 
 Here we let you explore some of the figures you can make using the phyloseq package.
 
@@ -25,7 +25,7 @@ Here we're importing data that is more or less an otu table and a taxonomy table
 ```{r create_otu_1}
 
 
-taxatable_raw <- read_csv('bact_alldata_taxatable_wTax.csv')
+taxatable_raw <- read_csv('Data_files/bact_alldata_taxatable_wTax.csv')
 
 head(taxatable_raw)
 
@@ -68,7 +68,7 @@ taxonomy <- tax_table(taxonomy)
 Finally, we want to get the sample meta data.
 
 ```{r create_meta_1}
-map <- read_csv('bact_alldata_mapfile.csv')
+map <- read_csv('Data_files/bact_alldata_mapfile.csv')
 
 head(map)
 ```
@@ -108,7 +108,7 @@ Lets start with some alpha diversity measures.
 ```{r alpha}
 
 p <- plot_richness(ps, x="Vertposition", measures=c("Shannon", "Simpson")) + theme_bw() + geom_point(size=2)
-p + geom_boxplot(data=p$data, aes(x=Vertposition, y=value, color=NULL), alpha = 0.1) + facet_grid( variable ~ litterorother, scales='free')
+p + geom_boxplot(data=p$data, aes(x=Vertposition, y=value, color=NULL), alpha = 0.1) + facet_grid( variable ~ Project, scales='free')
 
 
 
