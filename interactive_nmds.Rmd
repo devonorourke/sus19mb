@@ -86,8 +86,10 @@ plotlyNMDS
 
 ```
 
-You can save the plot as an html file.
+Hover will show the sample name. Double click on legend entries to show just those samples.
 
+You can save the plot as an html file:
+
+```{r save, eval=F}
 htmlwidgets::saveWidget(plotlyNMDS, "NMDS_with_plotly.html")
-
-
+```
