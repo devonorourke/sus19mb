@@ -1,0 +1,19 @@
+---
+title: "Interactive_tree"
+output: html_document
+---
+
+```{r setup, include=F}
+knitr::opts_chunk$set(echo = T, message=F, warning=F)
+
+```
+### Load the needed packages.
+
+```{r packages}
+library(phyloseq)
+library(tidyverse)
+library(plotly)
+library(data.table)
+library(scales)
+
+```
