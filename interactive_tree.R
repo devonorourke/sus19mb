@@ -9,6 +9,7 @@ library(scales)
 map <- read_csv('bact_alldata_mapfile.csv')
 tax <- read_csv('bact_alldata_taxatable_wTax.csv')
 
+
 otu <- as.data.frame(select(tax, -X1,-taxonomy))
 row.names(otu) <- tax$X1
 otu <- otu_table(otu, taxa_are_rows = T)
@@ -35,56 +36,42 @@ map[7:9] <- lapply(map[7:9] , factor)
 meta <- sample_data(map)
 
 
-input_tree <- read_tree('../../Documents/sus19mb/Bact_pruned_tree.tre')
+input_tree <- read_tree('Data_Files/pruned_tree.tre')
 
 ps <- phyloseq(otu, taxonomy, meta, input_tree)
 
 
-ps_H <- readRDS('../../Downloads/Phyloseq_filtered.rds')
+#ps_H <- readRDS('../../Downloads/Phyloseq_filtered.rds')
 
 
-ps_alpha <- subset_taxa(ps, Class=='c__Alphaproteobacteria')
+#ps_alpha <- subset_taxa(ps, Class=='c__Alphaproteobacteria')
 ps_ricket <- subset_taxa(ps, Order=='o__Rickettsiales')
 
-plot_tree(ps_ricket, ladderize="left", color="Vertposition", size='abundance') + coord_polar(theta="y") + 
-  guides(color = guide_legend(override.aes = list(size=5))) + scale_color_brewer(palette = 'Dark2') 
-
-plot_tree(ps_ricket, ladderize="left", color="Vertposition", size='abundance')  + 
-  guides(color = guide_legend(override.aes = list(size=5))) + scale_color_brewer(palette = 'Dark2') 
 
 
-pt <- plot_tree(ps, ladderize="left", color="Vertposition", size='abundance')  + 
-  guides(color = guide_legend(override.aes = list(size=5))) + scale_color_brewer(palette = 'Dark2') 
+Lowest_taxa <- do.call(paste, c(as.data.frame(tax_table(ps_ricket))[1:7], sep=";"))
+
+Lowest_taxa <- gsub("(;NA)*$", "", Lowest_taxa, perl=T)
+Lowest_taxa <- gsub("(;.__)*$", "", Lowest_taxa, perl=T)
+Lowest_taxa <- gsub("^.*;", "", Lowest_taxa, perl=T)
+
+colnames(tax_table(ps_ricket))[1] <- 'Lowest_taxa'
+tax_table(ps_ricket)[,'Lowest_taxa'] <- Lowest_taxa
 
 
-
-pt <- plot_tree(ps_ricket, ladderize="left", color="Vertposition", size='abundance', nodelabf = nodeplotblank)  + 
-  guides(color = guide_legend(override.aes = list(size=5))) + scale_color_brewer(palette = 'Dark2') 
-
-pt <- plot_tree(ps_H, ladderize="left", color="Treatment", size='abundance')  + 
-  guides(color = guide_legend(override.aes = list(size=5))) + scale_color_brewer(palette = 'Dark2') 
-
-pt <- plot_tree(ps_H, ladderize="left", color="Treatment", size='abundance', label.tips = 'Genus')  + 
-  guides(color = guide_legend(override.aes = list(size=5))) + scale_color_brewer(palette = 'Dark2') 
-
-
-pt <- pt + geom_point(data=as.data.frame(tax_table(ps_ricket)), aes(name=Genus))
-
-
-pt <- interactive_plot_tree(ps, ladderize="left", color="Vertposition", size='abundance', tooltip = 'Family')  + 
-  guides(color = guide_legend(override.aes = list(size=4))) + scale_color_brewer(palette = 'Dark2') 
+pt <- interactive_plot_tree(ps_ricket, ladderize="left", color="Vertposition", size='abundance', nodelabf=nodeplotblank, tooltip = 'Lowest_taxa')  + 
+    scale_color_manual(values=c("black","saddlebrown","tan2","green1","green4"))
+  
+guides(color = guide_legend(override.aes = list(size=4))) 
+  scale_color_brewer(palette = 'Dark2') 
 
 
 
-plotly_tree<-ggplotly(p=pt, tooltip = 'Family')
-plotly_tree<-ggplotly(p=pt)
-#plotly_tree<-ggplotly(p=pt)
+plotly_tree<-ggplotly(p=pt, tooltip = 'Lowest_taxa') 
 
 plotly_tree
 
-htmlwidgets::saveWidget(plotly_tree, 'Full_tree_with_hover.html')
-
-
+htmlwidgets::saveWidget(plotly_tree, 'tree_with_hover.html')
 
 
 
