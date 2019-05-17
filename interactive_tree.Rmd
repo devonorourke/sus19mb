@@ -3,6 +3,10 @@ title: "Interactive_tree"
 output: html_document
 ---
 
+This document will take you through creating an interactive tree plot of your microbiome data.
+
+
+
 ```{r setup, include=F}
 knitr::opts_chunk$set(echo = T, message=F, warning=F)
 
@@ -15,5 +19,14 @@ library(tidyverse)
 library(plotly)
 library(data.table)
 library(scales)
+
+```
+
+### Read the needed data, turn it into a phyloseq object
+
+```{r read_data}
+
+
+
 
 ```
