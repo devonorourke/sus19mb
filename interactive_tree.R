@@ -62,8 +62,8 @@ tax_table(ps_ricket)[,'Lowest_taxa'] <- Lowest_taxa
 pt <- interactive_plot_tree(ps_ricket, ladderize="left", color="Vertposition", size='abundance', nodelabf=nodeplotblank, tooltip = 'Lowest_taxa')  + 
     scale_color_manual(values=c("black","saddlebrown","tan2","green1","green4"))
   
-guides(color = guide_legend(override.aes = list(size=4))) 
-  scale_color_brewer(palette = 'Dark2') 
+#guides(color = guide_legend(override.aes = list(size=4))) 
+#  scale_color_brewer(palette = 'Dark2') 
 
 
 

@@ -1,5 +1,6 @@
 ---
-title: "Interactive_tree"
+title: "Interactive Tree"
+author: "Niel Infante"
 output: html_document
 ---
 
@@ -24,9 +25,246 @@ library(scales)
 
 ### Read the needed data, turn it into a phyloseq object
 
+Some data munging needs to happen to get the data files we have into the form needed for phyloseq. Ignore these steps if your data is well formed.
+
 ```{r read_data}
 
+map <- read_csv('Data_files/bact_alldata_mapfile.csv')
+tax <- read_csv('Data_files/bact_alldata_taxatable_wTax.csv')
 
+otu <- as.data.frame(select(tax, -X1,-taxonomy))
+row.names(otu) <- tax$X1
+otu <- otu_table(otu, taxa_are_rows = T)
+
+taxonomy <- data.frame(taxonomy=tax$taxonomy)
+row.names(taxonomy)<- tax$X1
+
+# Split taxonomy into separate columns
+taxonomy <- data.frame(separate(taxonomy, col=taxonomy, into= c("Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species"),  sep = ";"))
+
+# Change spaces to NA for missing data
+taxonomy <- apply(taxonomy, 2, function(x) gsub("^$|^ $", NA, x))
+
+taxonomy <- as.matrix(taxonomy)
+taxonomy <- tax_table(taxonomy)
+
+names(map)[1] <- 'Sample'
+row.names(map) <- map$Sample
+map[7:9] <- lapply(map[7:9] , factor)
+
+meta <- sample_data(map)
+
+input_tree <- read_tree('Data_Files/pruned_tree.tre')
+
+ps <- phyloseq(otu, taxonomy, meta, input_tree)
+
+```
+
+### Define tree function
+
+This is the plot tree function from phyloseq. However, I made a few small changes to make it play nicely with plotly. You will not need to change this for your data. Run this step, but you don't have to read all this code. I did so you don't have to, just like Paul McMurdie and Susan Holmes originally wrote the code so I didn't have to.
+
+```{r define_func}
+
+interactive_plot_tree <- function (physeq, method = "sampledodge", nodelabf = NULL, color = NULL, 
+          shape = NULL, size = NULL, min.abundance = Inf, label.tips = NULL, 
+          text.size = NULL, sizebase = 5, base.spacing = 0.02, ladderize = FALSE, 
+          plot.margin = 0.2, title = NULL, treetheme = NULL, justify = "jagged", tooltip = NULL) 
+{
+  fix_reserved_vars = function(aesvar) {
+    aesvar <- gsub("^abundance[s]{0,}$", "Abundance", aesvar, 
+                   ignore.case = TRUE)
+    aesvar <- gsub("^OTU[s]{0,}$", "OTU", aesvar, ignore.case = TRUE)
+    aesvar <- gsub("^taxa_name[s]{0,}$", "OTU", aesvar, ignore.case = TRUE)
+    aesvar <- gsub("^sample[s]{0,}$", "Sample", aesvar, ignore.case = TRUE)
+    return(aesvar)
+  }
+  if (!is.null(label.tips)) {
+    label.tips <- fix_reserved_vars(label.tips)
+  }
+  if (!is.null(color)) {
+    color <- fix_reserved_vars(color)
+  }
+  if (!is.null(shape)) {
+    shape <- fix_reserved_vars(shape)
+  }
+  if (!is.null(size)) {
+    size <- fix_reserved_vars(size)
+  }
+  if (is.null(phy_tree(physeq, FALSE))) {
+    stop("There is no phylogenetic tree in the object you have provided.\n", 
+         "Try phy_tree(physeq) to see for yourself.")
+  }
+  if (!inherits(physeq, "phyloseq")) {
+    method <- "treeonly"
+  }
+  treeSegs <- tree_layout(phy_tree(physeq), ladderize = ladderize)
+  edgeMap = aes(x = xleft, xend = xright, y = y, yend = y)
+  vertMap = aes(x = x, xend = x, y = vmin, yend = vmax)
+  p = ggplot(data = treeSegs$edgeDT) + geom_segment(edgeMap) + 
+    geom_segment(vertMap, data = treeSegs$vertDT)
+  if (is.null(text.size)) {
+    text.size <- phyloseq:::manytextsize(ntaxa(physeq))
+  }
+  if (!is.null(label.tips) & method != "sampledodge") {
+    labelDT = treeSegs$edgeDT[!is.na(OTU), ]
+    if (!is.null(tax_table(object = physeq, errorIfNULL = FALSE))) {
+      taxDT = data.table(tax_table(physeq), OTU = taxa_names(physeq), 
+                         key = "OTU")
+      labelDT = merge(x = labelDT, y = taxDT, by = "OTU")
+    }
+    if (justify == "jagged") {
+      labelMap <- aes_string(x = "xright", y = "y", label = label.tips, 
+                             color = color)
+    }
+    else {
+      labelMap <- aes_string(x = "max(xright, na.rm=TRUE)", 
+                             y = "y", label = label.tips, color = color)
+    }
+    p <- p + geom_text(labelMap, data = labelDT, size = I(text.size), 
+                       hjust = -0.1, na.rm = TRUE)
+  }
+  if (is.null(nodelabf)) {
+    nodelabf = phyloseq:::howtolabnodes(physeq)
+  }
+  p = nodelabf(p, treeSegs$edgeDT[!is.na(label), ])
+  p = nodelabf(p, treeSegs$vertDT[!is.na(label), ])
+  if (is.null(treetheme)) {
+    treetheme <- theme(axis.ticks = element_blank(), axis.title.x = element_blank(), 
+                       axis.text.x = element_blank(), axis.title.y = element_blank(), 
+                       axis.text.y = element_blank(), panel.background = element_blank(), 
+                       panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+  }
+  if (inherits(treetheme, "theme")) {
+    p <- p + treetheme
+  }
+  if (!is.null(title)) {
+    p <- p + ggtitle(title)
+  }
+  if (method != "sampledodge") {
+    return(p)
+  }
+  dodgeDT = treeSegs$edgeDT[!is.na(OTU), ]
+  dodgeDT = merge(x = dodgeDT, y = data.table(psmelt(physeq), 
+                                              key = "OTU"), by = "OTU")
+  if (justify == "jagged") {
+    dodgeDT <- dodgeDT[Abundance > 0, ]
+  }
+  if (!is.null(color) | !is.null(shape) | !is.null(size)) {
+    setkeyv(dodgeDT, cols = c("OTU", color, shape, size))
+  }
+  else {
+    setkey(dodgeDT, OTU, Sample)
+  }
+  dodgeDT[, `:=`(h.adj.index, 1:length(xright)), by = OTU]
+  if (justify == "jagged") {
+    dodgeDT[, `:=`(xdodge, (xright + h.adj.index * base.spacing * 
+                              max(xright, na.rm = TRUE)))]
+  }
+  else {
+    dodgeDT[, `:=`(xdodge, max(xright, na.rm = TRUE) + h.adj.index * 
+                     base.spacing * max(xright, na.rm = TRUE))]
+    dodgeDT <- dodgeDT[Abundance > 0, ]
+  }
+  dodgeMap <- aes_string(x = "xdodge", y = "y", color = color, 
+                         fill = color, shape = shape, size = size, names=tooltip)
+  p <- p + geom_point(dodgeMap, data = dodgeDT, na.rm = TRUE)
+  if (!is.null(size)) {
+    p <- p + scale_size_continuous(trans = log_trans(sizebase))
+  }
+  if (any(dodgeDT$Abundance >= min.abundance[1])) {
+    pointlabdf = dodgeDT[Abundance >= min.abundance[1], ]
+    p <- p + geom_text(mapping = aes(xdodge, y, label = Abundance), 
+                       data = pointlabdf, size = text.size, na.rm = TRUE)
+  }
+  if (!is.null(label.tips)) {
+    tiplabDT = dodgeDT
+    tiplabDT[, `:=`(xfartiplab, max(xdodge)), by = OTU]
+    tiplabDT <- tiplabDT[h.adj.index == 1, .SD, by = OTU]
+    if (!is.null(color)) {
+      if (color %in% sample_variables(physeq, errorIfNULL = FALSE)) {
+        color <- NULL
+      }
+    }
+    labelMap <- NULL
+    if (justify == "jagged") {
+      labelMap <- aes_string(x = "xfartiplab", y = "y", 
+                             label = label.tips, color = color)
+    }
+    else {
+      labelMap <- aes_string(x = "max(xfartiplab, na.rm=TRUE)", 
+                             y = "y", label = label.tips, color = color)
+    }
+    p <- p + geom_text(labelMap, tiplabDT, size = I(text.size), 
+                       hjust = -0.1, na.rm = TRUE)
+  }
+  min.x <- -0.01
+  max.x <- dodgeDT[, max(xright, na.rm = TRUE)]
+  if ("xdodge" %in% names(dodgeDT)) {
+    max.x <- dodgeDT[, max(xright, xdodge, na.rm = TRUE)]
+  }
+  if (plot.margin > 0) {
+    max.x <- max.x * (1 + plot.margin)
+  }
+  p <- p + scale_x_continuous(limits = c(min.x, max.x))
+
+  return(p)
+}
+```
+
+### Subset data
+
+I reduce the data just so plotting is faster. Subset or not as you want to explore your data. subset_samples also is helpful.
+
+```{r subset}
+
+ps_ricket <- subset_taxa(ps, Order=='o__Rickettsiales')
 
 
 ```
+
+### Make reporting taxa
+
+Here I change the taxa table so that there is a column called lowest_taxa. This is the taxonomic classification of the leaf with the lowest known name. NA's are removed, as are entries such as f__. 
+
+```{r report}
+
+# Collapse into single column
+Lowest_taxa <- do.call(paste, c(as.data.frame(tax_table(ps_ricket))[1:7], sep=";"))
+
+Lowest_taxa <- gsub("(;NA)*$", "", Lowest_taxa, perl=T)    # Remove NAs
+Lowest_taxa <- gsub("(;.__)*$", "", Lowest_taxa, perl=T)   # Remove g__
+Lowest_taxa <- gsub("^.*;", "", Lowest_taxa, perl=T)       # Remove everything to the left of the remaining entry
+
+# Add back to tax_table
+colnames(tax_table(ps_ricket))[1] <- 'Lowest_taxa'
+tax_table(ps_ricket)[,'Lowest_taxa'] <- Lowest_taxa
+
+```
+
+This is not necessary, you can use "Family", or whatever taxonomic level you like, by specifying that everywhere you see "Lowest_taxa" below.
+
+
+### Draw Tree and make interactive
+
+```{r draw_tree}
+
+pt <- interactive_plot_tree(ps_ricket, ladderize="left", color="Vertposition", size='abundance', nodelabf=nodeplotblank, tooltip = 'Lowest_taxa')  + scale_color_manual(values=c("black","saddlebrown","tan2","green1","green4"))
+  
+plotly_tree<-ggplotly(p=pt, tooltip = 'Lowest_taxa') 
+
+plotly_tree
+
+```
+
+This draws the tree. The dots are the different samples we have, colored by sample type. The size of the dot is a measure of abundance. Unfortunately, plotly overwrites color choices, and removes the abundance scale. I will update if I figure out how to fix this.
+
+You can save as an html using the below.
+
+
+```{r save, eval=F}
+htmlwidgets::saveWidget(plotly_tree, 'tree_with_hover.html')
+```
+
+
+
