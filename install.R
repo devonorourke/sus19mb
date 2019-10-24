@@ -1,3 +1,5 @@
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
 BiocManager::install("phyloseq")
 install.packages("UpSetR")
 install.packages("dplyr")
