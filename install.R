@@ -1,5 +1,4 @@
-source('http://bioconductor.org/biocLite.R')
-biocLite('phyloseq')
+BiocManager::install("phyloseq")
 install.packages("UpSetR")
 install.packages("dplyr")
 install.packages("tidyr")
